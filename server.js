@@ -5,12 +5,15 @@ const cors = require('cors');
 const path = require('path');
 const cp = require('child_process');
 const ffmpeg = require('ffmpeg-static');
+const morgan = require('morgan');
+const bodyParser = require('body-parser');
 
 const app = express();
 const port = 3000;
 
 app.use(express.json());
 app.use(cors());
+app.use(morgan('common'));
 
 app.get('/', (req, res) => {
     res.send('Hello World!');
@@ -28,6 +31,7 @@ app.post('/download', async (req, res) => {
         }
 
         const info = await ytdl.getInfo(uri);
+        // return res.send(info);
         const outputDir = path.join(__dirname, 'Downloads');
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir);
@@ -79,6 +83,7 @@ app.post('/download', async (req, res) => {
     }
 });
 
+
 app.post('/download-audio', async (req, res) => {
     try {
         const { uri } = req.body;
@@ -94,6 +99,8 @@ app.post('/download-audio', async (req, res) => {
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir);
         }
+
+        const safeTitle = info.videoDetails.title.replace(/[\/\?<>\\:\*\|"]/g, '_');
         const audioFilePath = path.join(outputDir, `${info.videoDetails.title}.mp3`);
 
         const audioStream = ytdl(uri, { quality: 'highestaudio' });
@@ -111,7 +118,17 @@ app.post('/download-audio', async (req, res) => {
 
         ffmpegProcess.on('close', () => {
             console.log(`Finished downloading: ${audioFilePath}`);
-            res.status(200).send(`Finished downloading: ${audioFilePath}`);
+            res.download(audioFilePath, `${safeTitle}.mp3`, (err) => {
+                if (err) {
+                    console.error('Error sending file:', err);
+                    res.status(500).json({ error: 'Error sending file' });
+                }
+                // Optional: Clean up the file after sending
+                // fs.unlink(audioFilePath, (unlinkErr) => {
+                //     if (unlinkErr) console.error('Error deleting file:', unlinkErr);
+                // });
+            });
+            // res.status(200).send(`Finished downloading: ${audioFilePath}`);
         });
 
         ffmpegProcess.on('error', (err) => {
@@ -127,6 +144,7 @@ app.post('/download-audio', async (req, res) => {
     }
 });
 
+
 app.listen(port, () => {
-    console.log(`Example app listening at http://localhost:${port}`);
+    console.log(`Server listening at http://localhost:${port}`);
 });
